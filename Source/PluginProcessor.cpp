@@ -1,11 +1,3 @@
-/*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
-
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -29,7 +21,6 @@ OutsetVerbAudioProcessor::OutsetVerbAudioProcessor()
         *this, nullptr, "Parameters", createParameterLayout());
     
     DBG("Constructor: APVTS initialized successfully");
-    DBG("Constructor: Parameter count: " + juce::String(getParameters().size()));
 }
 
 OutsetVerbAudioProcessor::~OutsetVerbAudioProcessor()
@@ -100,48 +91,50 @@ void OutsetVerbAudioProcessor::changeProgramName (int index, const juce::String&
 
 //==============================================================================
 
-void OutsetVerbAudioProcessor::updateReverbParameters()
+void OutsetVerbAudioProcessor::updateChainParameters()
 {
-    // Create a new parameters struct
-    juce::Reverb::Parameters params;
+    // Get reference to the reverb node in the chain
+    auto& reverbNode = processorChain.get<reverbIndex>();
     
-    // Get values from APVTS and map them to reverb parameters
-    params.roomSize = apvts->getRawParameterValue("roomSize")->load();
-    params.damping = apvts->getRawParameterValue("damping")->load();
-    params.width = apvts->getRawParameterValue("width")->load();
+    // Get values from APVTS and update the reverb node
+    reverbNode.setRoomSize(apvts->getRawParameterValue("roomSize")->load());
+    reverbNode.setDamping(apvts->getRawParameterValue("damping")->load());
+    reverbNode.setWidth(apvts->getRawParameterValue("width")->load());
     
     // Handle freeze mode - convert bool to float
     bool freezeMode = apvts->getRawParameterValue("freezeMode")->load() > 0.5f;
-    params.freezeMode = freezeMode ? 1.0f : 0.0f;
+    reverbNode.setFreezeMode(freezeMode ? 1.0f : 0.0f);
     
-    // Handle mix parameter by setting wet/dry levels
+    // Handle mix parameter using the convenience method
     float mixValue = apvts->getRawParameterValue("mix")->load();
-    params.wetLevel = mixValue;           // Mix = 1.0 means full wet
-    params.dryLevel = 1.0f - mixValue;    // Mix = 0.0 means full dry
-    
-    // Apply the parameters to the reverb
-    reverb.setParameters(params);
+    reverbNode.setMix(mixValue);
 }
+
+
 void OutsetVerbAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Initialize the reverb with the current sample rate
-    reverb.setSampleRate(sampleRate);
+    // Prepare the processor chain with the current audio specs
+    juce::dsp::ProcessSpec spec;
+    spec.sampleRate = sampleRate;
+    spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
+    spec.numChannels = static_cast<juce::uint32>(getTotalNumOutputChannels());
     
-    // Clear any existing reverb buffers/state
-    reverb.reset();
+    processorChain.prepare(spec);
     
     // Update reverb parameters to current APVTS values
-    updateReverbParameters();
+    updateChainParameters();
     
     // Optional: Log initialization for debugging
-    DBG("Reverb initialized - Sample Rate: " + juce::String(sampleRate) + 
-        ", Buffer Size: " + juce::String(samplesPerBlock));
+    DBG("ProcessorChain initialized - Sample Rate: " + juce::String(sampleRate) + 
+        ", Buffer Size: " + juce::String(samplesPerBlock) +
+        ", Channels: " + juce::String(getTotalNumOutputChannels()));
 }
+
 
 void OutsetVerbAudioProcessor::releaseResources()
 {
-    // Clear the reverb's internal buffers and reset its state
-    reverb.reset();
+    // Reset the entire processor chain
+    processorChain.reset();
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -185,29 +178,17 @@ void OutsetVerbAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     if (totalNumInputChannels == 0)
         return;
 
-    // Update reverb parameters from APVTS (this handles wet/dry internally)
-    updateReverbParameters();
+    // Update reverb parameters from APVTS
+    updateChainParameters();
 
-    // Process based on channel configuration
-    if (totalNumInputChannels == 1)
-    {
-        // MONO PROCESSING
-        auto* monoData = buffer.getWritePointer(0);
-        reverb.processMono(monoData, numSamples);
-    }
-    else if (totalNumInputChannels >= 2)
-    {
-        // STEREO PROCESSING
-        auto* leftData = buffer.getWritePointer(0);
-        auto* rightData = buffer.getWritePointer(1);
-        reverb.processStereo(leftData, rightData, numSamples);
-    }
-
-    // Handle any additional output channels (copy from stereo if needed)
-    for (int channel = 2; channel < totalNumOutputChannels; ++channel)
-    {
-        buffer.copyFrom(channel, 0, buffer, channel % 2, 0, numSamples);
-    }
+    // Create audio block from buffer for DSP processing
+    juce::dsp::AudioBlock<float> audioBlock(buffer);
+    
+    // Create process context
+    juce::dsp::ProcessContextReplacing<float> context(audioBlock);
+    
+    // Process through the entire chain
+    processorChain.process(context);
 }
 
 //==============================================================================

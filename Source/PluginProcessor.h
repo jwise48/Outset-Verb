@@ -1,14 +1,9 @@
-/*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
-
 #pragma once
 
-#include <JuceHeader.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
+#include <juce_core/juce_core.h>
+#include "Effects/ReverbNode.h"
 
 //==============================================================================
 /**
@@ -58,10 +53,17 @@ public:
     std::unique_ptr<juce::AudioProcessorValueTreeState> apvts;
 private:
     //==============================================================================
-    juce::Reverb reverb;
+    using ProcessorChain = juce::dsp::ProcessorChain<ReverbNode>;
+    ProcessorChain processorChain;
+    
+    // Add enum for chain indices (for future expansion)
+    enum ChainPositions
+    {
+        reverbIndex = 0
+    };
 
     // Helper method to update reverb parameters from APVTS
-    void updateReverbParameters();
+    void updateChainParameters();
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OutsetVerbAudioProcessor)
 };
