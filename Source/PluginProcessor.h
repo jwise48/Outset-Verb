@@ -4,6 +4,9 @@
 #include <juce_dsp/juce_dsp.h>
 #include <juce_core/juce_core.h>
 #include "Effects/ReverbNode.h"
+#include "Effects/BitCrusherNode.h"
+#include "Effects/DelayNode.h"
+#include "Effects/ThreeBandEQNode.h"
 
 //==============================================================================
 /**
@@ -53,13 +56,21 @@ public:
     std::unique_ptr<juce::AudioProcessorValueTreeState> apvts;
 private:
     //==============================================================================
-    using ProcessorChain = juce::dsp::ProcessorChain<ReverbNode>;
+    using ProcessorChain = juce::dsp::ProcessorChain<
+        BitCrusherNode,
+        DelayNode,
+        ThreeBandEQNode,
+        ReverbNode
+    >;
     ProcessorChain processorChain;
     
-    // Add enum for chain indices (for future expansion)
+    // Add enum for chain indices
     enum ChainPositions
     {
-        reverbIndex = 0
+        bitCrusherIndex = 0,
+        delayIndex = 1,
+        eqIndex = 2,
+        reverbIndex = 3
     };
 
     // Helper method to update reverb parameters from APVTS

@@ -14,13 +14,28 @@ OutsetVerbAudioProcessor::OutsetVerbAudioProcessor()
                        )
 #endif
 {
+    DBG("=== PluginProcessor Constructor START ===");
     DBG("Constructor: AudioProcessor base class initialized");
     
-    // Now initialize APVTS after base class is fully constructed
-    apvts = std::make_unique<juce::AudioProcessorValueTreeState>(
-        *this, nullptr, "Parameters", createParameterLayout());
+    DBG("About to create APVTS...");
+    try 
+    {
+        // Now initialize APVTS after base class is fully constructed
+        apvts = std::make_unique<juce::AudioProcessorValueTreeState>(
+            *this, nullptr, "Parameters", createParameterLayout());
+        
+        if (apvts)
+            DBG("APVTS created successfully - pointer is valid");
+        else
+            DBG("ERROR: APVTS is null after creation!");
+    }
+    catch (const std::exception& e)
+    {
+        DBG("EXCEPTION during APVTS creation: " + juce::String(e.what()));
+        throw;
+    }
     
-    DBG("Constructor: APVTS initialized successfully");
+    DBG("=== PluginProcessor Constructor END ===");
 }
 
 OutsetVerbAudioProcessor::~OutsetVerbAudioProcessor()
@@ -93,10 +108,31 @@ void OutsetVerbAudioProcessor::changeProgramName (int index, const juce::String&
 
 void OutsetVerbAudioProcessor::updateChainParameters()
 {
-    // Get reference to the reverb node in the chain
-    auto& reverbNode = processorChain.get<reverbIndex>();
+    // Update BitCrusher parameters
+    auto& bitCrusherNode = processorChain.get<bitCrusherIndex>();
+    bitCrusherNode.setBitDepth(apvts->getRawParameterValue("bitDepth")->load());
+    bitCrusherNode.setSampleRateReduction(apvts->getRawParameterValue("sampleRateReduction")->load());
+    bitCrusherNode.setMix(apvts->getRawParameterValue("bitCrusherMix")->load());
     
-    // Get values from APVTS and update the reverb node
+    // Update Delay parameters
+    auto& delayNode = processorChain.get<delayIndex>();
+    delayNode.setDelayTime(apvts->getRawParameterValue("delayTime")->load());
+    delayNode.setFeedback(apvts->getRawParameterValue("delayFeedback")->load());
+    delayNode.setMix(apvts->getRawParameterValue("delayMix")->load());
+    delayNode.setLowPassCutoff(apvts->getRawParameterValue("delayLowPassCutoff")->load());
+    
+    // Update EQ parameters
+    auto& eqNode = processorChain.get<eqIndex>();
+    eqNode.setLowGain(apvts->getRawParameterValue("lowGain")->load());
+    eqNode.setLowFreq(apvts->getRawParameterValue("lowFreq")->load());
+    eqNode.setMidGain(apvts->getRawParameterValue("midGain")->load());
+    eqNode.setMidFreq(apvts->getRawParameterValue("midFreq")->load());
+    eqNode.setMidQ(apvts->getRawParameterValue("midQ")->load());
+    eqNode.setHighGain(apvts->getRawParameterValue("highGain")->load());
+    eqNode.setHighFreq(apvts->getRawParameterValue("highFreq")->load());
+    
+    // Update Reverb parameters
+    auto& reverbNode = processorChain.get<reverbIndex>();
     reverbNode.setRoomSize(apvts->getRawParameterValue("roomSize")->load());
     reverbNode.setDamping(apvts->getRawParameterValue("damping")->load());
     reverbNode.setWidth(apvts->getRawParameterValue("width")->load());
@@ -105,9 +141,9 @@ void OutsetVerbAudioProcessor::updateChainParameters()
     bool freezeMode = apvts->getRawParameterValue("freezeMode")->load() > 0.5f;
     reverbNode.setFreezeMode(freezeMode ? 1.0f : 0.0f);
     
-    // Handle mix parameter using the convenience method
-    float mixValue = apvts->getRawParameterValue("mix")->load();
-    reverbNode.setMix(mixValue);
+    // Handle reverb mix parameter
+    float reverbMixValue = apvts->getRawParameterValue("reverbMix")->load();
+    reverbNode.setMix(reverbMixValue);
 }
 
 
@@ -199,10 +235,8 @@ bool OutsetVerbAudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* OutsetVerbAudioProcessor::createEditor()
 {
-    // Note: Opting to use the generic audio editor for now.
-    // Uncomment line below and remove the GenericAudioProcessorEditor to customize the GUI.
-    // return new OutsetVerbAudioProcessorEditor (*this);
-    return new juce::GenericAudioProcessorEditor(*this);
+    // Return our custom editor with organized effect containers
+    return new OutsetVerbAudioProcessorEditor (*this);
 }
 
 //==============================================================================
@@ -219,48 +253,157 @@ void OutsetVerbAudioProcessor::setStateInformation (const void* data, int sizeIn
 
 juce::AudioProcessorValueTreeState::ParameterLayout OutsetVerbAudioProcessor::createParameterLayout()
 {
-    DBG("createParameterLayout: Creating layout with one simple parameter");
+    DBG("=== createParameterLayout START ===");
     
-    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    try 
+    {
+        juce::AudioProcessorValueTreeState::ParameterLayout layout;
+
+        DBG("Adding BitCrusher parameters...");
+        // BitCrusher parameters
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID("bitDepth", 1),
+            "Bit Depth",
+            juce::NormalisableRange<float>(1.0f, 16.0f, 1.0f),
+            16.0f)
+        );
 
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID("roomSize", 1),  // Proper ParameterID with version hint
+        juce::ParameterID("sampleRateReduction", 1),
+        "Sample Rate Reduction",
+        juce::NormalisableRange<float>(1.0f, 50.0f, 1.0f),
+        1.0f)
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("bitCrusherMix", 1),
+        "BitCrusher Mix",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f),
+        0.0f)
+    );
+
+    // Delay parameters
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("delayTime", 1),
+        "Delay Time",
+        juce::NormalisableRange<float>(0.0f, 2000.0f, 1.0f),
+        250.0f)
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("delayFeedback", 1),
+        "Delay Feedback",
+        juce::NormalisableRange<float>(0.0f, 0.95f, 0.01f),
+        0.3f)
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("delayMix", 1),
+        "Delay Mix",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f),
+        0.0f)
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("delayLowPassCutoff", 1),
+        "Delay Low Pass",
+        juce::NormalisableRange<float>(200.0f, 20000.0f, 1.0f),
+        8000.0f)
+    );
+
+    // EQ parameters
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("lowGain", 1),
+        "Low Gain",
+        juce::NormalisableRange<float>(-12.0f, 12.0f, 0.1f),
+        0.0f)
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("lowFreq", 1),
+        "Low Freq",
+        juce::NormalisableRange<float>(20.0f, 500.0f, 1.0f),
+        200.0f)
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("midGain", 1),
+        "Mid Gain",
+        juce::NormalisableRange<float>(-12.0f, 12.0f, 0.1f),
+        0.0f)
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("midFreq", 1),
+        "Mid Freq",
+        juce::NormalisableRange<float>(200.0f, 5000.0f, 1.0f),
+        1000.0f)
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("midQ", 1),
+        "Mid Q",
+        juce::NormalisableRange<float>(0.1f, 10.0f, 0.1f),
+        1.0f)
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("highGain", 1),
+        "High Gain",
+        juce::NormalisableRange<float>(-12.0f, 12.0f, 0.1f),
+        0.0f)
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("highFreq", 1),
+        "High Freq",
+        juce::NormalisableRange<float>(2000.0f, 20000.0f, 1.0f),
+        8000.0f)
+    );
+
+    // Reverb parameters
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID("roomSize", 1),
         "Room Size",
-        juce::NormalisableRange<float>(0.f, 1.f, 0.01f),
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f),
         0.5f)
     );
 
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID("damping", 1),  // Proper ParameterID with version hint
+        juce::ParameterID("damping", 1),
         "Dampening",
-        juce::NormalisableRange<float>(0.f, 1.f, 0.01f),
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f),
         0.5f)
     );
 
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID("mix", 1),  // Proper ParameterID with version hint
-        "Mix",
-        juce::NormalisableRange<float>(0.f, 1.f, 0.01f),
-        0.5f)
+        juce::ParameterID("reverbMix", 1),
+        "Reverb Mix",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f),
+        0.0f)
     );
 
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID("width", 1),  // Proper ParameterID with version hint
+        juce::ParameterID("width", 1),
         "Width",
-        juce::NormalisableRange<float>(0.f, 1.f, 0.01f),
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f),
         0.5f)
     );
 
     layout.add(std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID("freezeMode", 1),  // Proper ParameterID with version hint
+        juce::ParameterID("freezeMode", 1),
         "Freeze",
         false)
     );
 
-
-    DBG("createParameterLayout: Simple parameter added");
-    
-    return layout;
+        DBG("createParameterLayout completed successfully");
+        return layout;
+    }
+    catch (const std::exception& e)
+    {
+        DBG("EXCEPTION in createParameterLayout: " + juce::String(e.what()));
+        throw;
+    }
 }
 
 //==============================================================================

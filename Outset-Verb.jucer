@@ -4,6 +4,22 @@
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1">
   <MAINGROUP id="zuWJwR" name="Outset-Verb">
     <GROUP id="{58892ABB-E256-57E2-F1B4-64043818A76E}" name="Source">
+      <FILE id="Ehw0ti" name="EffectContainer.cpp" compile="1" resource="0"
+            file="Source/EffectContainer.cpp" xcodeResource="1"/>
+      <FILE id="FPKZ5U" name="EffectContainer.h" compile="0" resource="0"
+            file="Source/EffectContainer.h" xcodeResource="1"/>
+      <FILE id="I11Q3E" name="BitCrusherNode.cpp" compile="1" resource="0"
+            file="Source/Effects/BitCrusherNode.cpp" xcodeResource="1"/>
+      <FILE id="QaW0lU" name="BitCrusherNode.h" compile="0" resource="0"
+            file="Source/Effects/BitCrusherNode.h" xcodeResource="1"/>
+      <FILE id="V1dCcY" name="DelayNode.cpp" compile="1" resource="0" file="Source/Effects/DelayNode.cpp"
+            xcodeResource="1"/>
+      <FILE id="f2lHjV" name="DelayNode.h" compile="0" resource="0" file="Source/Effects/DelayNode.h"
+            xcodeResource="1"/>
+      <FILE id="ti8ixf" name="ThreeBandEQNode.cpp" compile="1" resource="0"
+            file="Source/Effects/ThreeBandEQNode.cpp" xcodeResource="1"/>
+      <FILE id="y09riU" name="ThreeBandEQNode.h" compile="0" resource="0"
+            file="Source/Effects/ThreeBandEQNode.h" xcodeResource="1"/>
       <FILE id="bR0win" name="ReverbNode.h" compile="0" resource="0" file="Source/Effects/ReverbNode.h"
             xcodeResource="1"/>
       <FILE id="wilVFo" name="ReverbNode.cpp" compile="1" resource="0" file="Source/Effects/ReverbNode.cpp"
