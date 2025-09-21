@@ -37,15 +37,61 @@ OutsetVerbAudioProcessorEditor::OutsetVerbAudioProcessorEditor (OutsetVerbAudioP
     addAndMakeVisible(titleLabel);
     DBG("Title label added successfully");
     
+    DBG("About to setup chain ordering UI...");
+    try {
+        // Setup chain ordering UI first
+        setupChainOrderingUI();
+        DBG("Chain ordering UI setup completed successfully");
+    }
+    catch (const std::exception& e) {
+        DBG("EXCEPTION in setupChainOrderingUI: " + juce::String(e.what()));
+        DBG("Chain ordering UI setup failed - plugin will continue without it");
+    }
+
     DBG("About to setup effect containers...");
     // Setup all effect containers
     setupEffectContainers();
-    
+
+    DBG("About to update effect container states...");
+    // Update effect container states based on initial chain configuration
+    updateEffectContainerStates();
+
+    DBG("About to add parameter listener...");
+    // Add parameter listener for chain configuration changes
+    if (audioProcessor.apvts)
+        audioProcessor.apvts->addParameterListener("chainSlot1", this);
+        audioProcessor.apvts->addParameterListener("chainSlot2", this);
+        audioProcessor.apvts->addParameterListener("chainSlot3", this);
+        audioProcessor.apvts->addParameterListener("chainSlot4", this);
+
+    DBG("About to trigger initial layout...");
+    // Trigger initial layout now that all components are created
+    resized();
+    DBG("Initial layout completed - UI should now be visible");
+
     DBG("=== PluginEditor Constructor END ===");
 }
 
 OutsetVerbAudioProcessorEditor::~OutsetVerbAudioProcessorEditor()
 {
+    // Remove parameter listeners
+    if (audioProcessor.apvts)
+    {
+        audioProcessor.apvts->removeParameterListener("chainSlot1", this);
+        audioProcessor.apvts->removeParameterListener("chainSlot2", this);
+        audioProcessor.apvts->removeParameterListener("chainSlot3", this);
+        audioProcessor.apvts->removeParameterListener("chainSlot4", this);
+    }
+}
+
+//==============================================================================
+void OutsetVerbAudioProcessorEditor::parameterChanged(const juce::String& parameterID, float newValue)
+{
+    // Update effect container states when chain configuration changes
+    if (parameterID.startsWith("chainSlot"))
+    {
+        updateEffectContainerStates();
+    }
 }
 
 //==============================================================================
@@ -106,16 +152,123 @@ void OutsetVerbAudioProcessorEditor::setupEffectContainers()
         DBG("Reverb container created successfully");
         
         DBG("=== setupEffectContainers completed successfully ===");
-        
-        DBG("Triggering layout after container creation...");
-        resized();
-        DBG("Layout completed - UI should now be visible");
     }
     catch (const std::exception& e)
     {
         DBG("EXCEPTION in setupEffectContainers: " + juce::String(e.what()));
         throw;
     }
+}
+
+//==============================================================================
+void OutsetVerbAudioProcessorEditor::setupChainOrderingUI()
+{
+    DBG("=== setupChainOrderingUI START ===");
+
+    if (!audioProcessor.apvts)
+    {
+        DBG("ERROR: Cannot setup chain ordering UI - APVTS is null!");
+        return;
+    }
+
+    DBG("APVTS is valid, proceeding with chain ordering UI setup");
+
+    try
+    {
+        DBG("Setting up audio input label...");
+        // Setup audio input label
+        audioInputLabel.setText("Audio Input", juce::dontSendNotification);
+        audioInputLabel.setFont(juce::Font(14.0f));
+        audioInputLabel.setJustificationType(juce::Justification::centred);
+        audioInputLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        addAndMakeVisible(audioInputLabel);
+
+        // Setup flow arrows
+        for (int i = 0; i < 3; ++i)
+        {
+            flowArrows[i].setText("->", juce::dontSendNotification);
+            flowArrows[i].setFont(juce::Font(16.0f, juce::Font::bold));
+            flowArrows[i].setJustificationType(juce::Justification::centred);
+            flowArrows[i].setColour(juce::Label::textColourId, juce::Colours::lightblue);
+            addAndMakeVisible(flowArrows[i]);
+        }
+
+        // Setup audio output label
+        audioOutputLabel.setText("Audio Output", juce::dontSendNotification);
+        audioOutputLabel.setFont(juce::Font(14.0f));
+        audioOutputLabel.setJustificationType(juce::Justification::centred);
+        audioOutputLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        addAndMakeVisible(audioOutputLabel);
+
+        // Setup chain dropdowns and their attachments
+        const juce::StringArray effectOptions = {"None", "Bit Crusher", "Delay", "EQ", "Reverb"};
+
+        for (int i = 0; i < 4; ++i)
+        {
+            // Create dropdown
+            chainDropdowns[i] = std::make_unique<juce::ComboBox>();
+            chainDropdowns[i]->addItemList(effectOptions, 1);  // Start IDs from 1
+            chainDropdowns[i]->setSelectedId(1);  // Default to "None" (ID 1)
+            addAndMakeVisible(*chainDropdowns[i]);
+
+            // Create attachment
+            juce::String paramID = "chainSlot" + juce::String(i + 1);
+            chainAttachments[i] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+                *audioProcessor.apvts, paramID, *chainDropdowns[i]);
+        }
+
+        DBG("=== setupChainOrderingUI completed successfully ===");
+    }
+    catch (const std::exception& e)
+    {
+        DBG("EXCEPTION in setupChainOrderingUI: " + juce::String(e.what()));
+        throw;
+    }
+}
+
+//==============================================================================
+void OutsetVerbAudioProcessorEditor::updateEffectContainerStates()
+{
+    if (!audioProcessor.apvts)
+        return;
+
+    // Get current chain configuration
+    std::array<int, 4> chainConfig;
+    chainConfig[0] = static_cast<int>(audioProcessor.apvts->getRawParameterValue("chainSlot1")->load());
+    chainConfig[1] = static_cast<int>(audioProcessor.apvts->getRawParameterValue("chainSlot2")->load());
+    chainConfig[2] = static_cast<int>(audioProcessor.apvts->getRawParameterValue("chainSlot3")->load());
+    chainConfig[3] = static_cast<int>(audioProcessor.apvts->getRawParameterValue("chainSlot4")->load());
+
+    // Check which effects are currently in the chain
+    bool bitCrusherInChain = false;
+    bool delayInChain = false;
+    bool eqInChain = false;
+    bool reverbInChain = false;
+
+    for (int config : chainConfig)
+    {
+        switch (config)
+        {
+            case 1: bitCrusherInChain = true; break;  // Bit Crusher
+            case 2: delayInChain = true; break;       // Delay
+            case 3: eqInChain = true; break;           // EQ
+            case 4: reverbInChain = true; break;       // Reverb
+            default: break;  // None or invalid
+        }
+    }
+
+    // Update container states
+    if (bitCrusherContainer)
+        bitCrusherContainer->setEnabledState(bitCrusherInChain);
+
+    if (delayContainer)
+        delayContainer->setEnabledState(delayInChain);
+
+    if (eqContainer)
+        eqContainer->setEnabledState(eqInChain);
+
+    if (reverbContainer)
+        reverbContainer->setEnabledState(reverbInChain);
 }
 
 //==============================================================================
@@ -148,14 +301,61 @@ void OutsetVerbAudioProcessorEditor::resized()
         // Position title at the top
         titleLabel.setBounds(bounds.removeFromTop(titleHeight));
         DBG("Title label positioned");
-        
-        // Add some padding
+
+        // Only layout chain ordering UI if it was successfully created
+        if (chainDropdowns[0] && chainDropdowns[1] && chainDropdowns[2] && chainDropdowns[3])
+        {
+            DBG("Chain ordering UI components exist - positioning them");
+
+            // Position chain ordering UI below title
+            auto chainBounds = bounds.removeFromTop(chainOrderingHeight);
+            chainBounds.reduce(containerPadding, 5); // Reduced vertical padding for better proportions
+
+            // Improved spacing calculation with dedicated widths
+            int inputLabelWidth = 80;
+            int outputLabelWidth = 90;
+            int arrowWidth = 25;
+            int dropdownSpacing = 8;
+            int totalFixedWidth = inputLabelWidth + outputLabelWidth + (3 * arrowWidth) + (7 * dropdownSpacing);
+            int availableDropdownWidth = chainBounds.getWidth() - totalFixedWidth;
+            int dropdownWidth = availableDropdownWidth / 4;
+
+            // Layout with proper spacing
+            audioInputLabel.setBounds(chainBounds.removeFromLeft(inputLabelWidth));
+            chainBounds.removeFromLeft(dropdownSpacing);
+
+            for (int i = 0; i < 4; ++i)
+            {
+                if (i > 0)
+                {
+                    flowArrows[i-1].setBounds(chainBounds.removeFromLeft(arrowWidth));
+                    chainBounds.removeFromLeft(dropdownSpacing);
+                }
+
+                chainDropdowns[i]->setBounds(chainBounds.removeFromLeft(dropdownWidth));
+                if (i < 3) chainBounds.removeFromLeft(dropdownSpacing);
+            }
+
+            chainBounds.removeFromLeft(dropdownSpacing);
+            audioOutputLabel.setBounds(chainBounds.removeFromLeft(outputLabelWidth));
+
+            DBG("Chain ordering UI positioned with improved spacing");
+        }
+        else
+        {
+            DBG("WARNING: Chain ordering UI components not created - skipping chain layout");
+            // Skip the chain ordering height to maintain layout
+            bounds.removeFromTop(chainOrderingHeight);
+        }
+
+        // Add some padding below chain ordering
         bounds.reduce(containerPadding, containerPadding);
         DBG("Padding applied, remaining bounds: " + juce::String(bounds.getWidth()) + "x" + juce::String(bounds.getHeight()));
         
-        // Calculate container width (4 equal containers)
-        int containerWidth = (bounds.getWidth() - (containerPadding * 3)) / 4;
-        DBG("Container width calculated: " + juce::String(containerWidth));
+        // Calculate container width (4 equal containers) - UPDATED for new dimensions
+        int totalContainerPadding = containerPadding * 5; // 4 gaps between containers + 2 side margins
+        int containerWidth = (bounds.getWidth() - totalContainerPadding) / 4;
+        DBG("Container width calculated: " + juce::String(containerWidth) + " (with " + juce::String(containerPadding) + "px padding)");
         
         // Position each container horizontally
         DBG("Positioning BitCrusher container...");

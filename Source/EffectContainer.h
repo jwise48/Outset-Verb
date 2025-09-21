@@ -40,6 +40,9 @@ public:
                         const juce::String& labelText,
                         juce::AudioProcessorValueTreeState& apvts);
 
+    /** Sets the enabled state of the container (affects visual appearance). */
+    void setEnabledState(bool enabled);
+
     //==============================================================================
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -72,6 +75,7 @@ private:
 
     // Layout mode and constants
     LayoutMode layoutMode;
+    bool isEnabled = true;  // Track enabled state for visual feedback
     static constexpr int titleHeight = 25;
     static constexpr int controlHeight = 60;
     static constexpr int padding = 8;

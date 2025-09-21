@@ -56,22 +56,23 @@ public:
     std::unique_ptr<juce::AudioProcessorValueTreeState> apvts;
 private:
     //==============================================================================
-    using ProcessorChain = juce::dsp::ProcessorChain<
-        BitCrusherNode,
-        DelayNode,
-        ThreeBandEQNode,
-        ReverbNode
-    >;
-    ProcessorChain processorChain;
-    
-    // Add enum for chain indices
-    enum ChainPositions
+    // Individual effect processors for dynamic chain
+    BitCrusherNode bitCrusherProcessor;
+    DelayNode delayProcessor;
+    ThreeBandEQNode eqProcessor;
+    ReverbNode reverbProcessor;
+
+    // Chain configuration - stores which effect is in each position (0 = None)
+    enum EffectType
     {
-        bitCrusherIndex = 0,
-        delayIndex = 1,
-        eqIndex = 2,
-        reverbIndex = 3
+        none = 0,
+        bitCrusher = 1,
+        delay = 2,
+        eq = 3,
+        reverb = 4
     };
+
+    std::array<int, 4> chainConfiguration = {0, 0, 0, 0}; // Default: all None
 
     // Helper method to update reverb parameters from APVTS
     void updateChainParameters();

@@ -116,6 +116,40 @@ void EffectContainer::addToggleButton(const juce::String& parameterID,
 }
 
 //==============================================================================
+void EffectContainer::setEnabledState(bool enabled)
+{
+    isEnabled = enabled;
+
+    // Update visual appearance
+    if (isEnabled)
+    {
+        titleLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        setAlpha(1.0f);
+    }
+    else
+    {
+        titleLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
+        setAlpha(0.5f);
+    }
+
+    // Enable/disable all controls
+    for (auto& control : controls)
+    {
+        if (control.slider)
+        {
+            control.slider->setEnabled(isEnabled);
+            control.label->setColour(juce::Label::textColourId, isEnabled ? juce::Colours::white : juce::Colours::grey);
+        }
+        else if (control.toggleButton)
+        {
+            control.toggleButton->setEnabled(isEnabled);
+        }
+    }
+
+    repaint();
+}
+
+//==============================================================================
 void EffectContainer::paint(juce::Graphics& g)
 {
     // Draw container background

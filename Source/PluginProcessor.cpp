@@ -109,59 +109,64 @@ void OutsetVerbAudioProcessor::changeProgramName (int index, const juce::String&
 void OutsetVerbAudioProcessor::updateChainParameters()
 {
     // Update BitCrusher parameters
-    auto& bitCrusherNode = processorChain.get<bitCrusherIndex>();
-    bitCrusherNode.setBitDepth(apvts->getRawParameterValue("bitDepth")->load());
-    bitCrusherNode.setSampleRateReduction(apvts->getRawParameterValue("sampleRateReduction")->load());
-    bitCrusherNode.setMix(apvts->getRawParameterValue("bitCrusherMix")->load());
-    
+    bitCrusherProcessor.setBitDepth(apvts->getRawParameterValue("bitDepth")->load());
+    bitCrusherProcessor.setSampleRateReduction(apvts->getRawParameterValue("sampleRateReduction")->load());
+    bitCrusherProcessor.setMix(apvts->getRawParameterValue("bitCrusherMix")->load());
+
     // Update Delay parameters
-    auto& delayNode = processorChain.get<delayIndex>();
-    delayNode.setDelayTime(apvts->getRawParameterValue("delayTime")->load());
-    delayNode.setFeedback(apvts->getRawParameterValue("delayFeedback")->load());
-    delayNode.setMix(apvts->getRawParameterValue("delayMix")->load());
-    delayNode.setLowPassCutoff(apvts->getRawParameterValue("delayLowPassCutoff")->load());
-    
+    delayProcessor.setDelayTime(apvts->getRawParameterValue("delayTime")->load());
+    delayProcessor.setFeedback(apvts->getRawParameterValue("delayFeedback")->load());
+    delayProcessor.setMix(apvts->getRawParameterValue("delayMix")->load());
+    delayProcessor.setLowPassCutoff(apvts->getRawParameterValue("delayLowPassCutoff")->load());
+
     // Update EQ parameters
-    auto& eqNode = processorChain.get<eqIndex>();
-    eqNode.setLowGain(apvts->getRawParameterValue("lowGain")->load());
-    eqNode.setLowFreq(apvts->getRawParameterValue("lowFreq")->load());
-    eqNode.setMidGain(apvts->getRawParameterValue("midGain")->load());
-    eqNode.setMidFreq(apvts->getRawParameterValue("midFreq")->load());
-    eqNode.setMidQ(apvts->getRawParameterValue("midQ")->load());
-    eqNode.setHighGain(apvts->getRawParameterValue("highGain")->load());
-    eqNode.setHighFreq(apvts->getRawParameterValue("highFreq")->load());
-    
+    eqProcessor.setLowGain(apvts->getRawParameterValue("lowGain")->load());
+    eqProcessor.setLowFreq(apvts->getRawParameterValue("lowFreq")->load());
+    eqProcessor.setMidGain(apvts->getRawParameterValue("midGain")->load());
+    eqProcessor.setMidFreq(apvts->getRawParameterValue("midFreq")->load());
+    eqProcessor.setMidQ(apvts->getRawParameterValue("midQ")->load());
+    eqProcessor.setHighGain(apvts->getRawParameterValue("highGain")->load());
+    eqProcessor.setHighFreq(apvts->getRawParameterValue("highFreq")->load());
+
     // Update Reverb parameters
-    auto& reverbNode = processorChain.get<reverbIndex>();
-    reverbNode.setRoomSize(apvts->getRawParameterValue("roomSize")->load());
-    reverbNode.setDamping(apvts->getRawParameterValue("damping")->load());
-    reverbNode.setWidth(apvts->getRawParameterValue("width")->load());
-    
+    reverbProcessor.setRoomSize(apvts->getRawParameterValue("roomSize")->load());
+    reverbProcessor.setDamping(apvts->getRawParameterValue("damping")->load());
+    reverbProcessor.setWidth(apvts->getRawParameterValue("width")->load());
+
     // Handle freeze mode - convert bool to float
     bool freezeMode = apvts->getRawParameterValue("freezeMode")->load() > 0.5f;
-    reverbNode.setFreezeMode(freezeMode ? 1.0f : 0.0f);
-    
+    reverbProcessor.setFreezeMode(freezeMode ? 1.0f : 0.0f);
+
     // Handle reverb mix parameter
     float reverbMixValue = apvts->getRawParameterValue("reverbMix")->load();
-    reverbNode.setMix(reverbMixValue);
+    reverbProcessor.setMix(reverbMixValue);
+
+    // Update chain configuration from parameters
+    chainConfiguration[0] = static_cast<int>(apvts->getRawParameterValue("chainSlot1")->load());
+    chainConfiguration[1] = static_cast<int>(apvts->getRawParameterValue("chainSlot2")->load());
+    chainConfiguration[2] = static_cast<int>(apvts->getRawParameterValue("chainSlot3")->load());
+    chainConfiguration[3] = static_cast<int>(apvts->getRawParameterValue("chainSlot4")->load());
 }
 
 
 void OutsetVerbAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Prepare the processor chain with the current audio specs
+    // Prepare individual effect processors with the current audio specs
     juce::dsp::ProcessSpec spec;
     spec.sampleRate = sampleRate;
     spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
     spec.numChannels = static_cast<juce::uint32>(getTotalNumOutputChannels());
-    
-    processorChain.prepare(spec);
-    
-    // Update reverb parameters to current APVTS values
+
+    bitCrusherProcessor.prepare(spec);
+    delayProcessor.prepare(spec);
+    eqProcessor.prepare(spec);
+    reverbProcessor.prepare(spec);
+
+    // Update parameters to current APVTS values
     updateChainParameters();
-    
+
     // Optional: Log initialization for debugging
-    DBG("ProcessorChain initialized - Sample Rate: " + juce::String(sampleRate) + 
+    DBG("Individual processors initialized - Sample Rate: " + juce::String(sampleRate) +
         ", Buffer Size: " + juce::String(samplesPerBlock) +
         ", Channels: " + juce::String(getTotalNumOutputChannels()));
 }
@@ -169,8 +174,11 @@ void OutsetVerbAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
 
 void OutsetVerbAudioProcessor::releaseResources()
 {
-    // Reset the entire processor chain
-    processorChain.reset();
+    // Reset individual effect processors
+    bitCrusherProcessor.reset();
+    delayProcessor.reset();
+    eqProcessor.reset();
+    reverbProcessor.reset();
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -214,17 +222,44 @@ void OutsetVerbAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     if (totalNumInputChannels == 0)
         return;
 
-    // Update reverb parameters from APVTS
+    // Update parameters from APVTS
     updateChainParameters();
 
     // Create audio block from buffer for DSP processing
     juce::dsp::AudioBlock<float> audioBlock(buffer);
-    
-    // Create process context
-    juce::dsp::ProcessContextReplacing<float> context(audioBlock);
-    
-    // Process through the entire chain
-    processorChain.process(context);
+
+    // Process through effects in the configured order
+    for (int slot = 0; slot < 4; ++slot)
+    {
+        int effectType = chainConfiguration[slot];
+
+        // Skip if no effect selected for this slot
+        if (effectType == EffectType::none)
+            continue;
+
+        // Create process context for this effect
+        juce::dsp::ProcessContextReplacing<float> context(audioBlock);
+
+        // Process through the appropriate effect
+        switch (effectType)
+        {
+            case EffectType::bitCrusher:
+                bitCrusherProcessor.process(context);
+                break;
+            case EffectType::delay:
+                delayProcessor.process(context);
+                break;
+            case EffectType::eq:
+                eqProcessor.process(context);
+                break;
+            case EffectType::reverb:
+                reverbProcessor.process(context);
+                break;
+            default:
+                // Unknown effect type - skip
+                break;
+        }
+    }
 }
 
 //==============================================================================
@@ -394,6 +429,35 @@ juce::AudioProcessorValueTreeState::ParameterLayout OutsetVerbAudioProcessor::cr
         juce::ParameterID("freezeMode", 1),
         "Freeze",
         false)
+    );
+
+    // Chain configuration parameters
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID("chainSlot1", 1),
+        "Chain Slot 1",
+        juce::StringArray{"None", "Bit Crusher", "Delay", "EQ", "Reverb"},
+        0)  // Default: None
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID("chainSlot2", 1),
+        "Chain Slot 2",
+        juce::StringArray{"None", "Bit Crusher", "Delay", "EQ", "Reverb"},
+        0)  // Default: None
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID("chainSlot3", 1),
+        "Chain Slot 3",
+        juce::StringArray{"None", "Bit Crusher", "Delay", "EQ", "Reverb"},
+        0)  // Default: None
+    );
+
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID("chainSlot4", 1),
+        "Chain Slot 4",
+        juce::StringArray{"None", "Bit Crusher", "Delay", "EQ", "Reverb"},
+        0)  // Default: None
     );
 
         DBG("createParameterLayout completed successfully");

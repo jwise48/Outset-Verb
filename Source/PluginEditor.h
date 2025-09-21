@@ -20,7 +20,8 @@
     Features four effect containers arranged horizontally:
     - BitCrusher, Delay, Three Band EQ, and Reverb
 */
-class OutsetVerbAudioProcessorEditor  : public juce::AudioProcessorEditor
+class OutsetVerbAudioProcessorEditor  : public juce::AudioProcessorEditor,
+                                        private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     OutsetVerbAudioProcessorEditor (OutsetVerbAudioProcessor&);
@@ -41,18 +42,34 @@ private:
     std::unique_ptr<EffectContainer> delayContainer;
     std::unique_ptr<EffectContainer> eqContainer;
     std::unique_ptr<EffectContainer> reverbContainer;
-    
+
+    // Chain ordering UI components
+    std::array<std::unique_ptr<juce::ComboBox>, 4> chainDropdowns;
+    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>, 4> chainAttachments;
+    juce::Label audioInputLabel, audioOutputLabel;
+    std::array<juce::Label, 3> flowArrows;
+
     // Main title label
     juce::Label titleLabel;
     
     // Layout constants
-    static constexpr int windowWidth = 800;
-    static constexpr int windowHeight = 650;
-    static constexpr int titleHeight = 40;
-    static constexpr int containerPadding = 10;
+    static constexpr int windowWidth = 950;  // Increased by 150px for better spacing
+    static constexpr int windowHeight = 700; // Unchanged
+    static constexpr int titleHeight = 40;   // Unchanged
+    static constexpr int chainOrderingHeight = 60;  // Increased for better proportions
+    static constexpr int containerPadding = 12;     // Slightly increased for better spacing
     
     /** Initializes all effect containers with their parameters. */
     void setupEffectContainers();
+
+    /** Initializes the chain ordering UI components. */
+    void setupChainOrderingUI();
+
+    /** Updates EffectContainer enabled states based on current chain configuration. */
+    void updateEffectContainerStates();
+
+    // AudioProcessorValueTreeState::Listener override
+    void parameterChanged(const juce::String& parameterID, float newValue) override;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OutsetVerbAudioProcessorEditor)
 };
