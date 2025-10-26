@@ -68,6 +68,9 @@ private:
     /** Updates EffectContainer enabled states based on current chain configuration. */
     void updateEffectContainerStates();
 
+    /** Updates the available options in chain dropdowns based on current selections. */
+    void updateChainDropdownOptions();
+
     // AudioProcessorValueTreeState::Listener override
     void parameterChanged(const juce::String& parameterID, float newValue) override;
 

@@ -52,6 +52,10 @@ OutsetVerbAudioProcessorEditor::OutsetVerbAudioProcessorEditor (OutsetVerbAudioP
     // Setup all effect containers
     setupEffectContainers();
 
+    DBG("About to update chain dropdown options...");
+    // Update dropdown options based on initial chain configuration
+    updateChainDropdownOptions();
+
     DBG("About to update effect container states...");
     // Update effect container states based on initial chain configuration
     updateEffectContainerStates();
@@ -90,6 +94,7 @@ void OutsetVerbAudioProcessorEditor::parameterChanged(const juce::String& parame
     // Update effect container states when chain configuration changes
     if (parameterID.startsWith("chainSlot"))
     {
+        updateChainDropdownOptions();  // Update dropdown options first
         updateEffectContainerStates();
     }
 }
@@ -251,24 +256,84 @@ void OutsetVerbAudioProcessorEditor::updateEffectContainerStates()
         {
             case 1: bitCrusherInChain = true; break;  // Bit Crusher
             case 2: delayInChain = true; break;       // Delay
-            case 3: eqInChain = true; break;           // EQ
-            case 4: reverbInChain = true; break;       // Reverb
+            case 3: eqInChain = true; break;          // EQ
+            case 4: reverbInChain = true; break;      // Reverb
             default: break;  // None or invalid
         }
     }
 
-    // Update container states
+    // Update container states AND visibility
     if (bitCrusherContainer)
+    {
         bitCrusherContainer->setEnabledState(bitCrusherInChain);
+        bitCrusherContainer->setVisible(bitCrusherInChain);
+    }
 
     if (delayContainer)
+    {
         delayContainer->setEnabledState(delayInChain);
+        delayContainer->setVisible(delayInChain);
+    }
 
     if (eqContainer)
+    {
         eqContainer->setEnabledState(eqInChain);
+        eqContainer->setVisible(eqInChain);
+    }
 
     if (reverbContainer)
+    {
         reverbContainer->setEnabledState(reverbInChain);
+        reverbContainer->setVisible(reverbInChain);
+    }
+
+    // Trigger layout update to reposition visible containers
+    resized();
+}
+
+//==============================================================================
+void OutsetVerbAudioProcessorEditor::updateChainDropdownOptions()
+{
+    if (!audioProcessor.apvts)
+        return;
+
+    // Get current chain configuration
+    std::array<int, 4> chainConfig;
+    for (int i = 0; i < 4; ++i)
+    {
+        juce::String paramID = "chainSlot" + juce::String(i + 1);
+        chainConfig[i] = static_cast<int>(audioProcessor.apvts->getRawParameterValue(paramID)->load());
+    }
+
+    // Update each dropdown
+    for (int dropdownIndex = 0; dropdownIndex < 4; ++dropdownIndex)
+    {
+        if (!chainDropdowns[dropdownIndex])
+            continue;
+
+        // Effect IDs: 1=None, 2=BitCrusher, 3=Delay, 4=EQ, 5=Reverb
+        // Check which effects are used in OTHER slots
+        for (int effectID = 2; effectID <= 5; ++effectID)  // Skip "None" (ID 1)
+        {
+            bool isUsedInOtherSlot = false;
+            
+            // Check all OTHER slots for this effect
+            for (int otherSlot = 0; otherSlot < 4; ++otherSlot)
+            {
+                if (otherSlot != dropdownIndex && chainConfig[otherSlot] + 1 == effectID)
+                {
+                    isUsedInOtherSlot = true;
+                    break;
+                }
+            }
+            
+            // Enable/disable the item in the current dropdown
+            chainDropdowns[dropdownIndex]->setItemEnabled(effectID, !isUsedInOtherSlot);
+        }
+        
+        // "None" (ID 1) should always be enabled
+        chainDropdowns[dropdownIndex]->setItemEnabled(1, true);
+    }
 }
 
 //==============================================================================
@@ -309,7 +374,7 @@ void OutsetVerbAudioProcessorEditor::resized()
 
             // Position chain ordering UI below title
             auto chainBounds = bounds.removeFromTop(chainOrderingHeight);
-            chainBounds.reduce(containerPadding, 5); // Reduced vertical padding for better proportions
+            chainBounds.reduce(containerPadding, 5);
 
             // Improved spacing calculation with dedicated widths
             int inputLabelWidth = 80;
@@ -344,34 +409,72 @@ void OutsetVerbAudioProcessorEditor::resized()
         else
         {
             DBG("WARNING: Chain ordering UI components not created - skipping chain layout");
-            // Skip the chain ordering height to maintain layout
             bounds.removeFromTop(chainOrderingHeight);
         }
 
-        // Add some padding below chain ordering
+        // Add padding below chain ordering
         bounds.reduce(containerPadding, containerPadding);
         DBG("Padding applied, remaining bounds: " + juce::String(bounds.getWidth()) + "x" + juce::String(bounds.getHeight()));
         
-        // Calculate container width (4 equal containers) - UPDATED for new dimensions
-        int totalContainerPadding = containerPadding * 5; // 4 gaps between containers + 2 side margins
+        // DYNAMIC CONTAINER POSITIONING BASED ON CHAIN CONFIGURATION
+        // Get current chain configuration
+        std::array<int, 4> chainConfig = {0, 0, 0, 0};
+        if (audioProcessor.apvts)
+        {
+            chainConfig[0] = static_cast<int>(audioProcessor.apvts->getRawParameterValue("chainSlot1")->load());
+            chainConfig[1] = static_cast<int>(audioProcessor.apvts->getRawParameterValue("chainSlot2")->load());
+            chainConfig[2] = static_cast<int>(audioProcessor.apvts->getRawParameterValue("chainSlot3")->load());
+            chainConfig[3] = static_cast<int>(audioProcessor.apvts->getRawParameterValue("chainSlot4")->load());
+        }
+        
+        // Calculate container width for 4 slots
+        int totalContainerPadding = containerPadding * 5;
         int containerWidth = (bounds.getWidth() - totalContainerPadding) / 4;
-        DBG("Container width calculated: " + juce::String(containerWidth) + " (with " + juce::String(containerPadding) + "px padding)");
+        DBG("Container width calculated: " + juce::String(containerWidth));
         
-        // Position each container horizontally
-        DBG("Positioning BitCrusher container...");
-        bitCrusherContainer->setBounds(bounds.removeFromLeft(containerWidth));
-        bounds.removeFromLeft(containerPadding); // spacing
-        
-        DBG("Positioning Delay container...");
-        delayContainer->setBounds(bounds.removeFromLeft(containerWidth));
-        bounds.removeFromLeft(containerPadding); // spacing
-        
-        DBG("Positioning EQ container...");
-        eqContainer->setBounds(bounds.removeFromLeft(containerWidth));
-        bounds.removeFromLeft(containerPadding); // spacing
-        
-        DBG("Positioning Reverb container...");
-        reverbContainer->setBounds(bounds); // remaining space
+        // Position containers based on chain configuration
+        for (int slotIndex = 0; slotIndex < 4; ++slotIndex)
+        {
+            int effectType = chainConfig[slotIndex];
+            
+            // Get the container bounds for this slot
+            auto slotBounds = bounds.removeFromLeft(containerWidth);
+            
+            // Position the appropriate container in this slot
+            EffectContainer* containerToPosition = nullptr;
+            
+            switch (effectType)
+            {
+                case 1: // Bit Crusher
+                    containerToPosition = bitCrusherContainer.get();
+                    DBG("Positioning BitCrusher in slot " + juce::String(slotIndex));
+                    break;
+                case 2: // Delay
+                    containerToPosition = delayContainer.get();
+                    DBG("Positioning Delay in slot " + juce::String(slotIndex));
+                    break;
+                case 3: // EQ
+                    containerToPosition = eqContainer.get();
+                    DBG("Positioning EQ in slot " + juce::String(slotIndex));
+                    break;
+                case 4: // Reverb
+                    containerToPosition = reverbContainer.get();
+                    DBG("Positioning Reverb in slot " + juce::String(slotIndex));
+                    break;
+                default: // None (0) or invalid
+                    DBG("Slot " + juce::String(slotIndex) + " is empty");
+                    break;
+            }
+            
+            // Position the container if one was selected for this slot
+            if (containerToPosition != nullptr)
+            {
+                containerToPosition->setBounds(slotBounds);
+            }
+            
+            // Add spacing between slots
+            bounds.removeFromLeft(containerPadding);
+        }
         
         DBG("=== resized() completed successfully ===");
     }
