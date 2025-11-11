@@ -1,12 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_dsp/juce_dsp.h>
-#include <juce_core/juce_core.h>
-#include "Effects/ReverbNode.h"
-#include "Effects/BitCrusherNode.h"
-#include "Effects/DelayNode.h"
-#include "Effects/ThreeBandEQNode.h"
+#include "OutsetVerbEngine.h"
 
 //==============================================================================
 /**
@@ -51,31 +46,12 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     // Declare as a unique_ptr so we can initialize it later
     std::unique_ptr<juce::AudioProcessorValueTreeState> apvts;
 private:
     //==============================================================================
-    // Individual effect processors for dynamic chain
-    BitCrusherNode bitCrusherProcessor;
-    DelayNode delayProcessor;
-    ThreeBandEQNode eqProcessor;
-    ReverbNode reverbProcessor;
-
-    // Chain configuration - stores which effect is in each position (0 = None)
-    enum EffectType
-    {
-        none = 0,
-        bitCrusher = 1,
-        delay = 2,
-        eq = 3,
-        reverb = 4
-    };
-
-    std::array<int, 4> chainConfiguration = {0, 0, 0, 0}; // Default: all None
-
-    // Helper method to update reverb parameters from APVTS
-    void updateChainParameters();
+    // Audio processing engine
+    std::unique_ptr<OutsetVerbEngine> engine;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OutsetVerbAudioProcessor)
 };
